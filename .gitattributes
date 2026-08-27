@@ -1,0 +1,6 @@
+# 默认把文本文件规范化为 LF，保证 Windows、Docker 和 Linux 行为一致
+* text=auto eol=lf
+
+# Windows 批处理文件例外：使用 Windows 换行符
+*.bat text eol=crlf
+*.cmd text eol=crlf

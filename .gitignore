@@ -1,0 +1,22 @@
+# JetBrains / PyCharm 本地工程配置
+.idea/
+
+# Python 虚拟环境与缓存
+.venv/
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 本地环境变量与密钥：永远不提交真实值
+.env
+.env.*
+!.env.example
+
+# 后续 React 前端依赖与构建产物
+node_modules/
+dist/
