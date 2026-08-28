@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 
-
 app = FastAPI(
     title="EvidenceForge API",
     version="0.1.0",
