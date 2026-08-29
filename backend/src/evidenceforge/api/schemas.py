@@ -1,0 +1,24 @@
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from evidenceforge.domain.tasks import TaskStatus
+
+
+class ResearchTaskCreateRequest(BaseModel):
+    """创建调研任务的 HTTP 请求模型。"""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+    )
+
+    question: str = Field(min_length=1)
+
+
+class ResearchTaskResponse(BaseModel):
+    """返回给 API 调用方的任务模型。"""
+
+    task_id: UUID
+    question: str
+    status: TaskStatus
