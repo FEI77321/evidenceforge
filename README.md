@@ -15,6 +15,10 @@ EvidenceForge 面向公开网页与 PDF 调研场景。系统的目标不是只�
 - 已接入 FastAPI 与 Uvicorn；
 - 已实现并在浏览器验证 `GET /healthz`；
 - 已配置 `.gitignore`，不会提交本地 IDE 配置、虚拟环境或真实密钥。
+- 已完成纯 Python 的 `ResearchTask` 领域模型与任务状态机：`queued`、`running`、`cancel_requested`、`completed`、`failed`、`canceled`；
+- 已固化成功、失败、取消、终态不可回退与取消幂等等生命周期规则；
+- 已定义 `TaskRepository` / `TaskQueue` 抽象 Port，并提供仅用于测试的内存 Fake 实现；
+- 已建立 14 条离线单元测试，并通过 pytest 与 Ruff 格式 / 静态检查验证。
 
 ### 尚未实现
 
@@ -53,6 +57,8 @@ Plan
 - Uvicorn
 - uv
 - Git
+- pytest
+- Ruff
 
 后续计划接入：
 
@@ -109,6 +115,10 @@ http://127.0.0.1:8000/docs
 - 复杂能力必须有评测收益和失败案例，不能只为堆叠技术名词而接入。
 
 ## 项目进度
+
+- **Day 1 ✅**：完成独立仓库、Python / uv 后端工程、FastAPI / Uvicorn 与 `GET /healthz`；
+- **Day 2 ✅**：完成任务状态机、Repository / Queue Port、内存 Fake、14 条离线单元测试与代码质量检查；本地提交：`ff6c7be feat(tasks): add task lifecycle foundation`；
+- **下一步 Day 3**：在不接 PostgreSQL、Redis、Celery 的前提下，使用 Fake 实现 `TaskService`、Pydantic 请求 / 响应模型、FastAPI 任务 API 与 API 契约测试。
 
 详细的项目架构、阶段路线、决策、真实状态和跨对话续接信息维护在个人知识库中：
 
