@@ -1,13 +1,36 @@
+from collections.abc import Iterator
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
+from evidenceforge.api.deps import get_task_service
+from evidenceforge.application.task_service import TaskService
 from evidenceforge.main import app
+from evidenceforge.testing import FakeTaskQueue, FakeTaskRepository
 
-client = TestClient(app)
+
+@pytest.fixture
+def client() -> Iterator[TestClient]:
+    repository = FakeTaskRepository()
+    queue = FakeTaskQueue()
+    service = TaskService(
+        repository=repository,
+        queue=queue,
+    )
+
+    app.dependency_overrides[get_task_service] = lambda: service
+
+    try:
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        app.dependency_overrides.pop(get_task_service, None)
 
 
-def test_create_research_task_returns_202_and_queued_task() -> None:
+def test_create_research_task_returns_202_and_queued_task(
+    client: TestClient,
+) -> None:
     response = client.post(
         "/api/v1/research-tasks",
         json={
@@ -25,7 +48,9 @@ def test_create_research_task_returns_202_and_queued_task() -> None:
     assert payload["status"] == "queued"
 
 
-def test_create_research_task_rejects_a_blank_question() -> None:
+def test_create_research_task_rejects_a_blank_question(
+    client: TestClient,
+) -> None:
     response = client.post(
         "/api/v1/research-tasks",
         json={
@@ -36,7 +61,9 @@ def test_create_research_task_rejects_a_blank_question() -> None:
     assert response.status_code == 422
 
 
-def test_get_research_task_returns_an_existing_task() -> None:
+def test_get_research_task_returns_an_existing_task(
+    client: TestClient,
+) -> None:
     create_response = client.post(
         "/api/v1/research-tasks",
         json={
@@ -56,7 +83,9 @@ def test_get_research_task_returns_an_existing_task() -> None:
     assert payload["status"] == "queued"
 
 
-def test_get_research_task_returns_404_for_unknown_id() -> None:
+def test_get_research_task_returns_404_for_unknown_id(
+    client: TestClient,
+) -> None:
     response = client.get(f"/api/v1/research-tasks/{uuid4()}")
 
     assert response.status_code == 404
@@ -65,7 +94,9 @@ def test_get_research_task_returns_404_for_unknown_id() -> None:
     }
 
 
-def test_cancel_research_task_requests_cancellation_idempotently() -> None:
+def test_cancel_research_task_requests_cancellation_idempotently(
+    client: TestClient,
+) -> None:
     create_response = client.post(
         "/api/v1/research-tasks",
         json={

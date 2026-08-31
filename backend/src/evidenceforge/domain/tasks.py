@@ -79,6 +79,23 @@ class ResearchTask:
             question=normalized_question,
         )
 
+    @classmethod
+    def restore(
+        cls,
+        *,
+        task_id: UUID,
+        question: str,
+        status: TaskStatus,
+    ) -> "ResearchTask":
+        """从可信持久化数据还原一条既有任务。"""
+
+        task = cls.create(
+            question=question,
+            task_id=task_id,
+        )
+        task._status = status
+        return task
+
     @property
     def status(self) -> TaskStatus:
         """返回任务当前状态。"""

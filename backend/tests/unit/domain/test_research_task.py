@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import pytest
 
 from evidenceforge.domain.tasks import (
@@ -118,3 +120,14 @@ def test_terminal_task_ignores_later_cancellation_requests(
 def test_task_question_cannot_be_blank() -> None:
     with pytest.raises(ValueError, match="question must not be blank"):
         ResearchTask.create(question="   ")
+
+
+def test_task_can_be_restored_from_a_persisted_terminal_status() -> None:
+    task = ResearchTask.restore(
+        task_id=uuid4(),
+        question="调研 PostgreSQL 持久化任务状态",
+        status=TaskStatus.COMPLETED,
+    )
+
+    assert task.status is TaskStatus.COMPLETED
+    assert task.is_terminal is True
