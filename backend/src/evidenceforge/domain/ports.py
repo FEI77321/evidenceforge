@@ -22,3 +22,10 @@ class TaskQueue(Protocol):
 
     async def enqueue(self, task_id: UUID) -> None:
         """投递指定任务，供后台 Worker 异步处理。"""
+
+
+class ResearchExecutor(Protocol):
+    """执行一条调研任务中的实际耗时工作。"""
+
+    async def execute(self, task: ResearchTask) -> None:
+        """执行调研工作；执行失败时抛出异常。"""

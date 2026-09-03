@@ -35,3 +35,18 @@ class FakeTaskQueue:
         """记录一条被投递的任务 ID。"""
 
         self.enqueued_task_ids.append(task_id)
+
+class FakeResearchExecutor:
+    """仅供测试使用的调研执行器。"""
+
+    def __init__(self, error: Exception | None = None) -> None:
+        self.executed_task_ids: list[UUID] = []
+        self._error = error
+
+    async def execute(self, task: ResearchTask) -> None:
+        """记录执行过的任务；配置异常时模拟执行失败。"""
+
+        self.executed_task_ids.append(task.id)
+
+        if self._error is not None:
+            raise self._error
