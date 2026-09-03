@@ -1,11 +1,11 @@
 from evidenceforge.application.task_service import TaskService
+from evidenceforge.infrastructure.celery_task_queue import CeleryTaskQueue
 from evidenceforge.infrastructure.database import async_session_factory
 from evidenceforge.infrastructure.persistence.task_repository import (
     PostgreSQLTaskRepository,
 )
-from evidenceforge.testing import FakeTaskQueue
 
-_queue = FakeTaskQueue()
+_queue = CeleryTaskQueue()
 
 
 def get_task_service() -> TaskService:

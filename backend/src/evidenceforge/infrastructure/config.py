@@ -20,6 +20,20 @@ class Settings(BaseSettings):
     postgres_db: str
     postgres_host: str = "127.0.0.1"
     postgres_port: int = 5432
+    redis_host: str = "127.0.0.1"
+    redis_port: int = 6379
+
+    @property
+    def redis_broker_url(self) -> str:
+        """构造 Celery 投递任务时使用的 Redis 地址。"""
+
+        return f"redis://{self.redis_host}:{self.redis_port}/0"
+
+    @property
+    def redis_result_backend_url(self) -> str:
+        """构造 Celery 保存任务执行结果时使用的 Redis 地址。"""
+
+        return f"redis://{self.redis_host}:{self.redis_port}/1"
 
     @property
     def database_url(self) -> URL:

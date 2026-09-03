@@ -26,11 +26,14 @@ EvidenceForge 面向公开网页与 PDF 调研场景。系统的目标不是只�
 - 已实现 `PostgreSQLTaskRepository`，并验证任务创建、读取、状态更新可持久化；
 - 已验证真实 API 创建任务后，可通过后续 API 查询和 PostgreSQL 直接 SQL 查询读回同一条记录；
 - 已建立 PostgreSQL 连通性与 Repository 集成测试；当前完整测试套件通过，Ruff 检查通过。
+- 已通过 Docker Compose 启动 Redis 7，并将其作为 Celery 的任务 Broker 与结果 Backend；
+- 已实现 `CeleryTaskQueue` 与 `worker_tasks.py`：API 仅投递任务 ID，独立 Worker 从 Redis 消费任务并更新 PostgreSQL 状态；
+- 已完成真实端到端验证：创建任务后状态从 `queued` 自动推进为 `running`、最终为 `completed`。
 
 ### 尚未实现
 
-- Redis、Celery Worker 与真实后台任务队列；
-- Worker 推进任务状态、任务取消信号、失败重试与任务事件；
+- 真实网页调研执行逻辑，以及 Worker 运行中的细粒度取消中断；
+- Worker 失败重试、任务事件记录与可查询的执行日志；
 - SSE 任务进度流；
 - 网页 / PDF 摄入、来源快照与版本管理；
 - RAG 检索、LangGraph 工作流、Tool Calling；
@@ -74,10 +77,11 @@ Plan
 - asyncpg
 - Alembic
 - Pydantic Settings
+- Redis 7
+- Celery
 
 后续计划接入：
 
-- Redis + Celery
 - React + TypeScript + Vite
 - RAG、LangGraph、Tool Calling、MCP、安全与评测模块
 
@@ -132,8 +136,9 @@ http://127.0.0.1:8000/docs
 - **Day 1 ✅**：完成独立仓库、Python / uv 后端工程、FastAPI / Uvicorn 与 `GET /healthz`；提交：`19592ce feat(api): bootstrap FastAPI health endpoint`；
 - **Day 2 ✅**：完成任务状态机、Repository / Queue Port、内存 Fake、14 条离线单元测试与代码质量检查；提交：`ff6c7be feat(tasks): add task lifecycle foundation`；
 - **Day 3 ✅**：完成 `TaskService`、Pydantic 契约、任务创建 / 查询 / 取消 API、API 契约测试；提交：`9711202 feat(api): add task management API`；
-- **Day 4 ✅（待本次提交）**：完成 Docker PostgreSQL、SQLAlchemy / asyncpg、Alembic 初始迁移、`PostgreSQLTaskRepository`、真实数据库集成测试，以及 API 默认使用真实 Repository；
-- **下一步 Day 5**：接入 Redis 与 Celery，让已持久化的任务真正进入后台 Worker 执行，并处理取消、失败与状态推进。
+- **Day 4 ✅**：完成 Docker PostgreSQL、SQLAlchemy / asyncpg、Alembic 初始迁移、`PostgreSQLTaskRepository`、真实数据库集成测试，以及 API 默认使用真实 Repository；提交：`c8bcce3 feat(storage): persist research tasks in PostgreSQL`；
+- **Day 5 ✅（待本次提交）**：完成 Redis 7、Celery 配置、`CeleryTaskQueue`、Worker Stub，并验证真实任务可从 `queued` 自动推进至 `completed`；
+- **下一步 Day 6**：为 Worker 补充可测试的任务处理服务、失败状态与重试策略，并开始接入真正的调研执行逻辑。
 
 详细的项目架构、阶段路线、决策、真实状态和跨对话续接信息维护在个人知识库中：
 
