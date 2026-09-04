@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     postgres_port: int = 5432
     redis_host: str = "127.0.0.1"
     redis_port: int = 6379
+    fixture_research_source_path: Path = (
+        PROJECT_ROOT
+        / "backend"
+        / "tests"
+        / "fixtures"
+        / "research_sources"
+        / "fastapi_background_tasks.md"
+    )
 
     @property
     def redis_broker_url(self) -> str:

@@ -7,20 +7,20 @@ from evidenceforge.application.research_task_processor import (
     ResearchTaskProcessor,
 )
 from evidenceforge.infrastructure.celery_app import celery_app
+from evidenceforge.infrastructure.config import Settings
 from evidenceforge.infrastructure.database import (
     async_engine,
     async_session_factory,
 )
+from evidenceforge.infrastructure.fixture_research_executor import (
+    FixtureResearchExecutor,
+)
 from evidenceforge.infrastructure.persistence.task_repository import (
     PostgreSQLTaskRepository,
 )
-from evidenceforge.infrastructure.stub_research_executor import (
-    StubResearchExecutor,
-)
-
 
 logger = get_task_logger(__name__)
-
+settings = Settings()
 
 @celery_app.task(name="evidenceforge.run_research_task")
 def run_research_task(task_id: str) -> str:
@@ -35,7 +35,9 @@ async def _process_research_task(task_id: str) -> str:
     repository = PostgreSQLTaskRepository(
         session_factory=async_session_factory,
     )
-    executor = StubResearchExecutor()
+    executor = FixtureResearchExecutor(
+        fixture_path=settings.fixture_research_source_path,
+    )
 
     processor = ResearchTaskProcessor(
         repository=repository,

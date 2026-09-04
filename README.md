@@ -32,6 +32,9 @@ EvidenceForge 面向公开网页与 PDF 调研场景。系统的目标不是只�
 - 已将 Worker 的状态流转规则提炼为可独立测试的 `ResearchTaskProcessor`，避免业务规则与 Celery、Redis、SQLAlchemy 基础设施耦合；
 - 已定义 `ResearchExecutor` 抽象，并提供生产环境的 `StubResearchExecutor` 与测试环境的 `FakeResearchExecutor`；
 - 已覆盖任务完成、取消、重复消息、未知任务和执行失败五类状态处理场景；执行器异常会使任务从 `running` 明确转为 `failed`。
+- 已实现 `FixtureResearchExecutor`：Worker 可以读取受控的本地 Markdown Fixture，而不再只是空 Stub 成功；
+- 已通过统一 `Settings` 配置 Fixture 来源路径，并验证默认路径真实指向已纳入版本控制的资料文件；
+- 已建立 Fixture 读取成功与文件缺失两类测试，并完成真实链路验证：Worker 成功读取 `fastapi_background_tasks.md` 后将任务推进为 `completed`。
 
 ### 尚未实现
 
@@ -141,8 +144,9 @@ http://127.0.0.1:8000/docs
 - **Day 3 ✅**：完成 `TaskService`、Pydantic 契约、任务创建 / 查询 / 取消 API、API 契约测试；提交：`9711202 feat(api): add task management API`；
 - **Day 4 ✅**：完成 Docker PostgreSQL、SQLAlchemy / asyncpg、Alembic 初始迁移、`PostgreSQLTaskRepository`、真实数据库集成测试，以及 API 默认使用真实 Repository；提交：`c8bcce3 feat(storage): persist research tasks in PostgreSQL`；
 - **Day 5 ✅**：完成 Redis 7、Celery 配置、`CeleryTaskQueue`、Worker Stub，并验证真实任务可从 `queued` 自动推进至 `completed`；提交：`1a4fdde feat(worker): process research tasks with Celery`；
-- **Day 6 ✅（待本次提交）**：完成可测试的 `ResearchTaskProcessor`、`ResearchExecutor` 抽象、Stub / Fake 执行器，以及 Worker 执行失败时的 `running → failed` 状态记录与单元测试；
-- **下一步 Day 7**：确定真实调研执行器的最小边界；优先接入受控 Fixture / 本地资料处理，再逐步进入网页与 PDF 来源摄入。React 前端和 SSE 仍未开始。
+- **Day 6 ✅**：完成可测试的 `ResearchTaskProcessor`、`ResearchExecutor` 抽象、Stub / Fake 执行器，以及 Worker 执行失败时的 `running → failed` 状态记录与单元测试；提交：`ac98d23 feat(worker): handle task execution failures`；
+- **Day 7 ✅（待本次提交）**：完成受控 Markdown Fixture、`FixtureResearchExecutor`、Fixture 路径配置及其测试；已验证真实 Celery Worker 成功读取本地资料并将任务推进至 `completed`；
+- **下一步 Day 8**：为来源建立最小快照数据模型与持久化边界，再逐步接入真实网页和 PDF 来源摄入。React 前端和 SSE 仍未开始。
 
 详细的项目架构、阶段路线、决策、真实状态和跨对话续接信息维护在个人知识库中：
 
