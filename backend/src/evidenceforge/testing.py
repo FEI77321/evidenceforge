@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from evidenceforge.domain.sources import SourceSnapshot
 from evidenceforge.domain.tasks import ResearchTask
 
 
@@ -23,6 +24,29 @@ class FakeTaskRepository:
         """保存已有任务的最新状态。"""
 
         self._tasks[task.id] = task
+
+
+class FakeSourceSnapshotRepository:
+    """仅供测试使用的内存来源快照仓储。"""
+
+    def __init__(self) -> None:
+        self._snapshots: list[SourceSnapshot] = []
+
+    async def add(self, snapshot: SourceSnapshot) -> None:
+        """追加保存一条来源快照。"""
+
+        self._snapshots.append(snapshot)
+
+    async def list_by_task_id(
+        self,
+        task_id: UUID,
+    ) -> list[SourceSnapshot]:
+        """返回指定任务的全部来源快照。"""
+
+        return sorted(
+            (snapshot for snapshot in self._snapshots if snapshot.task_id == task_id),
+            key=lambda snapshot: snapshot.captured_at,
+        )
 
 
 class FakeTaskQueue:

@@ -35,17 +35,22 @@ EvidenceForge 面向公开网页与 PDF 调研场景。系统的目标不是只�
 - 已实现 `FixtureResearchExecutor`：Worker 可以读取受控的本地 Markdown Fixture，而不再只是空 Stub 成功；
 - 已通过统一 `Settings` 配置 Fixture 来源路径，并验证默认路径真实指向已纳入版本控制的资料文件；
 - 已建立 Fixture 读取成功与文件缺失两类测试，并完成真实链路验证：Worker 成功读取 `fastapi_background_tasks.md` 后将任务推进为 `completed`。
+- 已定义不可变 `SourceSnapshot` 领域模型，包含任务归属、来源 URI、来源类型、原文、UTF-8 SHA-256 内容 Hash 与 UTC 快照时间；
+- 已新增 PostgreSQL `source_snapshots` 表及其 Alembic migration，并建立 `task_id → research_tasks.id` 外键和按任务查询索引；
+- 已实现 `PostgreSQLSourceSnapshotRepository`，支持追加保存来源快照，并按任务、抓取时间升序查询；
+- 已将真实快照 Repository 注入 Celery Worker：Fixture 执行器读取本地 Markdown 后会创建并持久化快照；
+- 已完成真实端到端验证：API 创建任务后，Celery Worker 将任务推进为 `completed`，且 PostgreSQL 中可按 `task_id` 查询到 `fixture://fastapi_background_tasks.md` 的原文长度、Hash 与 UTC 快照时间。
 
 ### 尚未实现
 
 - 真实网页调研执行逻辑，以及 Worker 运行中的细粒度取消中断；
 - Worker 自动重试策略、任务事件记录与可查询的执行日志；
 - SSE 任务进度流；
-- 网页 / PDF 摄入、来源快照与版本管理；
+- 真实网页 / PDF 摄入、真实 URL 抓取、来源版本比较与差异展示；
 - RAG 检索、LangGraph 工作流、Tool Calling；
 - Claim-Evidence 校验、安全门、红队评测；
 - React 前端；
-- PostgreSQL 中的来源、证据、结论、报告与任务事件等后续数据表。
+- PostgreSQL 中的证据、结论、报告与任务事件等后续数据表。
 
 ## 项目目标
 
@@ -145,8 +150,9 @@ http://127.0.0.1:8000/docs
 - **Day 4 ✅**：完成 Docker PostgreSQL、SQLAlchemy / asyncpg、Alembic 初始迁移、`PostgreSQLTaskRepository`、真实数据库集成测试，以及 API 默认使用真实 Repository；提交：`c8bcce3 feat(storage): persist research tasks in PostgreSQL`；
 - **Day 5 ✅**：完成 Redis 7、Celery 配置、`CeleryTaskQueue`、Worker Stub，并验证真实任务可从 `queued` 自动推进至 `completed`；提交：`1a4fdde feat(worker): process research tasks with Celery`；
 - **Day 6 ✅**：完成可测试的 `ResearchTaskProcessor`、`ResearchExecutor` 抽象、Stub / Fake 执行器，以及 Worker 执行失败时的 `running → failed` 状态记录与单元测试；提交：`ac98d23 feat(worker): handle task execution failures`；
-- **Day 7 ✅（待本次提交）**：完成受控 Markdown Fixture、`FixtureResearchExecutor`、Fixture 路径配置及其测试；已验证真实 Celery Worker 成功读取本地资料并将任务推进至 `completed`；
-- **下一步 Day 8**：为来源建立最小快照数据模型与持久化边界，再逐步接入真实网页和 PDF 来源摄入。React 前端和 SSE 仍未开始。
+- **Day 7 ✅**：完成受控 Markdown Fixture、`FixtureResearchExecutor`、Fixture 路径配置及其测试；已验证真实 Celery Worker 成功读取本地资料并将任务推进至 `completed`；提交：`4052b22 feat(research): load controlled fixture source`；
+- **Day 8 ✅（待本次提交）**：完成 `SourceSnapshot` 领域模型、`SourceSnapshotRepository` Port / Fake、`source_snapshots` Alembic 迁移、PostgreSQL Repository、Fixture 执行器写入与 Worker 真实依赖装配；已验证真实任务从 `queued` 进入 `completed` 后，PostgreSQL 中存在关联的 Fixture 来源快照、SHA-256 Hash 和 UTC `captured_at`；
+- **下一步 Day 9**：为已持久化的来源快照增加只读查询 API，例如按任务查询来源列表；暂不接真实网页/PDF、RAG、模型、SSE 或 React。
 
 详细的项目架构、阶段路线、决策、真实状态和跨对话续接信息维护在个人知识库中：
 

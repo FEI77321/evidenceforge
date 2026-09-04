@@ -15,6 +15,9 @@ from evidenceforge.infrastructure.database import (
 from evidenceforge.infrastructure.fixture_research_executor import (
     FixtureResearchExecutor,
 )
+from evidenceforge.infrastructure.persistence.source_snapshot_repository import (
+    PostgreSQLSourceSnapshotRepository,
+)
 from evidenceforge.infrastructure.persistence.task_repository import (
     PostgreSQLTaskRepository,
 )
@@ -32,15 +35,19 @@ def run_research_task(task_id: str) -> str:
 async def _process_research_task(task_id: str) -> str:
     """准备基础设施资源并调用任务处理服务。"""
 
-    repository = PostgreSQLTaskRepository(
+    task_repository = PostgreSQLTaskRepository(
+        session_factory=async_session_factory,
+    )
+    snapshot_repository = PostgreSQLSourceSnapshotRepository(
         session_factory=async_session_factory,
     )
     executor = FixtureResearchExecutor(
         fixture_path=settings.fixture_research_source_path,
+        snapshot_repository=snapshot_repository,
     )
 
     processor = ResearchTaskProcessor(
-        repository=repository,
+        repository=task_repository,
         executor=executor,
     )
 

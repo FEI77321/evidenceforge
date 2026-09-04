@@ -1,6 +1,7 @@
 from typing import Protocol
 from uuid import UUID
 
+from evidenceforge.domain.sources import SourceSnapshot
 from evidenceforge.domain.tasks import ResearchTask
 
 
@@ -15,6 +16,19 @@ class TaskRepository(Protocol):
 
     async def update(self, task: ResearchTask) -> None:
         """保存任务状态等字段的后续变更。"""
+
+
+class SourceSnapshotRepository(Protocol):
+    """来源快照追加保存与按任务查询的抽象契约。"""
+
+    async def add(self, snapshot: SourceSnapshot) -> None:
+        """追加保存一条不可变来源快照。"""
+
+    async def list_by_task_id(
+        self,
+        task_id: UUID,
+    ) -> list[SourceSnapshot]:
+        """返回某调研任务对应的全部来源快照。"""
 
 
 class TaskQueue(Protocol):
