@@ -7,6 +7,9 @@ from evidenceforge.infrastructure.database import async_session_factory
 from evidenceforge.infrastructure.persistence.source_snapshot_repository import (
     PostgreSQLSourceSnapshotRepository,
 )
+from evidenceforge.infrastructure.persistence.task_event_repository import (
+    PostgreSQLTaskEventRepository,
+)
 from evidenceforge.infrastructure.persistence.task_repository import (
     PostgreSQLTaskRepository,
 )
@@ -20,9 +23,13 @@ def get_task_service() -> TaskService:
     repository = PostgreSQLTaskRepository(
         session_factory=async_session_factory,
     )
+    event_repository = PostgreSQLTaskEventRepository(
+        session_factory=async_session_factory,
+    )
 
     return TaskService(
         repository=repository,
+        event_repository=event_repository,
         queue=_queue,
     )
 

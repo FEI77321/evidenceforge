@@ -1,5 +1,7 @@
+from collections.abc import Mapping
 from uuid import UUID
 
+from evidenceforge.domain.events import TaskEvent, TaskEventType
 from evidenceforge.domain.sources import SourceSnapshot
 from evidenceforge.domain.tasks import ResearchTask
 
@@ -47,6 +49,37 @@ class FakeSourceSnapshotRepository:
             (snapshot for snapshot in self._snapshots if snapshot.task_id == task_id),
             key=lambda snapshot: snapshot.captured_at,
         )
+
+class FakeTaskEventRepository:
+    """仅供测试使用的内存任务事件仓储。"""
+
+    def __init__(self) -> None:
+        self.events: list[TaskEvent] = []
+
+    async def append(
+        self,
+        *,
+        task_id: UUID,
+        event_type: TaskEventType,
+        stage: str | None = None,
+        payload: Mapping[str, object] | None = None,
+    ) -> TaskEvent:
+        """按任务维度分配连续序号，并追加一条事件。"""
+
+        sequence = 1 + sum(
+            event.task_id == task_id
+            for event in self.events
+        )
+        event = TaskEvent.create(
+            task_id=task_id,
+            sequence=sequence,
+            event_type=event_type,
+            stage=stage,
+            payload=payload,
+        )
+        self.events.append(event)
+
+        return event
 
 
 class FakeTaskQueue:

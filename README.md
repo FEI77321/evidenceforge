@@ -42,18 +42,24 @@ EvidenceForge 面向公开网页与 PDF 调研场景。系统的目标不是只�
 - 已完成真实端到端验证：API 创建任务后，Celery Worker 将任务推进为 `completed`，且 PostgreSQL 中可按 `task_id` 查询到 `fixture://fastapi_background_tasks.md` 的原文长度、Hash 与 UTC 快照时间。
 - 已新增 `SourceSnapshotService`，以“先确认任务存在、再查询来源快照”的方式组织来源读取用例；应用层不直接依赖 FastAPI 或 PostgreSQL。
 - 已提供 `GET /api/v1/research-tasks/{task_id}/sources`：未知任务返回 `404`，已存在但尚无来源的任务返回 `200 []`，已有来源时返回快照 ID、URI、类型、原文、SHA-256 Hash 与 UTC 快照时间。
-- 已完成来源读取的应用层与 API 契约测试；当前完整测试套件为 **49 passed**，Ruff 静态检查通过。
+- 已完成来源读取的应用层与 API 契约测试；Day 9 收尾时完整测试套件为 **49 passed**，Ruff 静态检查通过。
+- 已定义不可变 `TaskEvent` 领域模型与 `TaskEventType` 枚举，事件包含任务归属、按任务递增的 `sequence`、事件类型、可选阶段、结构化 Payload 与 UTC 发生时间；
+- 已新增 PostgreSQL `task_events` 表及其 Alembic migration，建立 `task_id → research_tasks.id` 外键、`(task_id, sequence)` 唯一约束与事件类型约束；
+- 已定义 `TaskEventRepository` Port，并提供测试用 `FakeTaskEventRepository` 和生产用 `PostgreSQLTaskEventRepository`；事件仓储以追加方式保存事件，并按单个任务分配连续序号；
+- 已将任务事件写入接入应用层：`TaskService` 记录 `created`、`cancel_requested`，`ResearchTaskProcessor` 记录 `running`、`completed`、`failed`、`canceled`；
+- 已将真实 PostgreSQL 事件仓储注入 Celery Worker，并完成真实端到端验证：正常任务产生 `created → running → completed`，取消任务产生 `created → cancel_requested → canceled`；取消任务不会执行 Fixture，也不会保存来源快照；
+- 已覆盖任务事件领域规则、Fake 仓储顺序、应用层状态流转、PostgreSQL 持久化与 API 依赖装配；当前完整测试套件为 **55 passed**，Ruff 静态检查通过。
 
 ### 尚未实现
 
 - 真实网页调研执行逻辑，以及 Worker 运行中的细粒度取消中断；
-- Worker 自动重试策略、任务事件记录与可查询的执行日志；
+- Worker 自动重试策略、任务事件的 HTTP 查询 API 与可查询的执行日志；
 - SSE 任务进度流；
 - 真实网页 / PDF 摄入、真实 URL 抓取、来源版本比较与差异展示；
 - RAG 检索、LangGraph 工作流、Tool Calling；
 - Claim-Evidence 校验、安全门、红队评测；
 - React 前端；
-- PostgreSQL 中的证据、结论、报告与任务事件等后续数据表。
+- PostgreSQL 中的证据、结论与报告等后续数据表。
 
 ## 项目目标
 
@@ -193,12 +199,27 @@ uv run pytest -q
 uv run ruff check src tests migrations
 ```
 
-截至 Day 9，预期结果为：
+截至 Day 10，预期结果为：
 
 ```text
-49 passed
+55 passed
 All checks passed!
 ```
+
+Day 10 除了自动化测试外，还应完成一次真实 API → Redis → Celery Worker → PostgreSQL 联调。创建完成任务后，可在 PostgreSQL 中按任务 ID 查询：
+
+```sql
+SELECT
+    sequence,
+    event_type,
+    payload,
+    occurred_at
+FROM task_events
+WHERE task_id = '<task_id>'
+ORDER BY sequence;
+```
+
+正常完成任务应得到 `created → running → completed`；在 Worker 启动前请求取消的任务应得到 `created → cancel_requested → canceled`，且来源快照查询返回 `[]`。
 
 ## 开发原则
 
@@ -219,7 +240,8 @@ All checks passed!
 - **Day 7 ✅**：完成受控 Markdown Fixture、`FixtureResearchExecutor`、Fixture 路径配置及其测试；已验证真实 Celery Worker 成功读取本地资料并将任务推进至 `completed`；提交：`4052b22 feat(research): load controlled fixture source`；
 - **Day 8 ✅**：完成 `SourceSnapshot` 领域模型、`SourceSnapshotRepository` Port / Fake、`source_snapshots` Alembic 迁移、PostgreSQL Repository、Fixture 执行器写入与 Worker 真实依赖装配；已验证真实任务从 `queued` 进入 `completed` 后，PostgreSQL 中存在关联的 Fixture 来源快照、SHA-256 Hash 和 UTC `captured_at`；提交：`0265dea feat(research): persist fixture source snapshots`；
 - **Day 9 ✅**：完成 `SourceSnapshotService`、来源快照响应契约和 `GET /api/v1/research-tasks/{task_id}/sources`；已覆盖已有来源、空来源和未知任务三种语义，并真实验证 API → Redis → Worker → PostgreSQL → HTTP 读取闭环；提交：`17a22a9 feat(api): expose task source snapshots`；
-- **下一步 Day 10**：建立追加式 `task_events` 持久化与事件发布边界，记录任务状态变化；暂不接 SSE。
+- **Day 10 ✅**：完成追加式 `task_events` 领域模型、Port / Fake、PostgreSQL 表与 Repository、Alembic migration；创建与取消请求分别记录 `created`、`cancel_requested`，Worker 状态处理分别记录 `running`、`completed`、`failed`、`canceled`。已完成成功和取消两条真实 API → Redis → Celery Worker → PostgreSQL 事件链路验证；暂不提供事件查询 API 与 SSE。
+- **下一步 Day 11**：提供任务事件查询 API，并为后续 SSE 任务进度流准备应用层查询能力与响应契约。
 
 详细的项目架构、阶段路线、决策、真实状态和跨对话续接信息维护在个人知识库中：
 

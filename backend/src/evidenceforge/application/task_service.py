@@ -1,6 +1,11 @@
 from uuid import UUID
 
-from evidenceforge.domain.ports import TaskQueue, TaskRepository
+from evidenceforge.domain.events import TaskEventType
+from evidenceforge.domain.ports import (
+    TaskEventRepository,
+    TaskQueue,
+    TaskRepository,
+)
 from evidenceforge.domain.tasks import ResearchTask
 
 
@@ -10,17 +15,24 @@ class TaskService:
     def __init__(
         self,
         repository: TaskRepository,
+        event_repository: TaskEventRepository,
         queue: TaskQueue,
     ) -> None:
         self._repository = repository
+        self._event_repository = event_repository
         self._queue = queue
 
     async def create_task(self, question: str) -> ResearchTask:
-        """创建、保存并投递一条调研任务。"""
+        """创建、保存、记录事件并投递一条调研任务。"""
 
         task = ResearchTask.create(question=question)
 
         await self._repository.add(task)
+        await self._event_repository.append(
+            task_id=task.id,
+            event_type=TaskEventType.CREATED,
+            payload={"status": task.status.value},
+        )
         await self._queue.enqueue(task.id)
 
         return task
@@ -40,5 +52,10 @@ class TaskService:
         cancellation_accepted = task.request_cancellation()
         if cancellation_accepted:
             await self._repository.update(task)
+            await self._event_repository.append(
+                task_id=task.id,
+                event_type=TaskEventType.CANCEL_REQUESTED,
+                payload={"status": task.status.value},
+            )
 
         return task

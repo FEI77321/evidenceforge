@@ -1,6 +1,8 @@
+from collections.abc import Mapping
 from typing import Protocol
 from uuid import UUID
 
+from evidenceforge.domain.events import TaskEvent, TaskEventType
 from evidenceforge.domain.sources import SourceSnapshot
 from evidenceforge.domain.tasks import ResearchTask
 
@@ -29,6 +31,20 @@ class SourceSnapshotRepository(Protocol):
         task_id: UUID,
     ) -> list[SourceSnapshot]:
         """返回某调研任务对应的全部来源快照。"""
+
+
+class TaskEventRepository(Protocol):
+    """任务审计事件的追加式持久化能力。"""
+
+    async def append(
+        self,
+        *,
+        task_id: UUID,
+        event_type: TaskEventType,
+        stage: str | None = None,
+        payload: Mapping[str, object] | None = None,
+    ) -> TaskEvent:
+        """为任务追加一条事件，并返回带连续序号的事件。"""
 
 
 class TaskQueue(Protocol):

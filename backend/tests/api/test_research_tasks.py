@@ -18,6 +18,7 @@ from evidenceforge.domain.sources import SourceSnapshot
 from evidenceforge.main import app
 from evidenceforge.testing import (
     FakeSourceSnapshotRepository,
+    FakeTaskEventRepository,
     FakeTaskQueue,
     FakeTaskRepository,
 )
@@ -33,9 +34,11 @@ def client(
     snapshot_repository: FakeSourceSnapshotRepository,
 ) -> Iterator[TestClient]:
     task_repository = FakeTaskRepository()
+    event_repository = FakeTaskEventRepository()
     queue = FakeTaskQueue()
     task_service = TaskService(
         repository=task_repository,
+        event_repository=event_repository,
         queue=queue,
     )
     source_snapshot_service = SourceSnapshotService(
