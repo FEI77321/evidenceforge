@@ -240,7 +240,7 @@ ORDER BY sequence;
 - **Day 7 ✅**：完成受控 Markdown Fixture、`FixtureResearchExecutor`、Fixture 路径配置及其测试；已验证真实 Celery Worker 成功读取本地资料并将任务推进至 `completed`；提交：`4052b22 feat(research): load controlled fixture source`；
 - **Day 8 ✅**：完成 `SourceSnapshot` 领域模型、`SourceSnapshotRepository` Port / Fake、`source_snapshots` Alembic 迁移、PostgreSQL Repository、Fixture 执行器写入与 Worker 真实依赖装配；已验证真实任务从 `queued` 进入 `completed` 后，PostgreSQL 中存在关联的 Fixture 来源快照、SHA-256 Hash 和 UTC `captured_at`；提交：`0265dea feat(research): persist fixture source snapshots`；
 - **Day 9 ✅**：完成 `SourceSnapshotService`、来源快照响应契约和 `GET /api/v1/research-tasks/{task_id}/sources`；已覆盖已有来源、空来源和未知任务三种语义，并真实验证 API → Redis → Worker → PostgreSQL → HTTP 读取闭环；提交：`17a22a9 feat(api): expose task source snapshots`；
-- **Day 10 ✅**：完成追加式 `task_events` 领域模型、Port / Fake、PostgreSQL 表与 Repository、Alembic migration；创建与取消请求分别记录 `created`、`cancel_requested`，Worker 状态处理分别记录 `running`、`completed`、`failed`、`canceled`。已完成成功和取消两条真实 API → Redis → Celery Worker → PostgreSQL 事件链路验证；暂不提供事件查询 API 与 SSE。
+- **Day 10 ✅**：完成追加式 `task_events` 领域模型、Port / Fake、PostgreSQL 表与 Repository、Alembic migration；创建与取消请求分别记录 `created`、`cancel_requested`，Worker 状态处理分别记录 `running`、`completed`、`failed`、`canceled`。已完成成功和取消两条真实 API → Redis → Celery Worker → PostgreSQL 事件链路验证；暂不提供事件查询 API 与 SSE；提交：`18d503b feat(events): persist task lifecycle events`。
 - **下一步 Day 11**：提供任务事件查询 API，并为后续 SSE 任务进度流准备应用层查询能力与响应契约。
 
 详细的项目架构、阶段路线、决策、真实状态和跨对话续接信息维护在个人知识库中：
