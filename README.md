@@ -40,6 +40,9 @@ EvidenceForge 面向公开网页与 PDF 调研场景。系统的目标不是只�
 - 已实现 `PostgreSQLSourceSnapshotRepository`，支持追加保存来源快照，并按任务、抓取时间升序查询；
 - 已将真实快照 Repository 注入 Celery Worker：Fixture 执行器读取本地 Markdown 后会创建并持久化快照；
 - 已完成真实端到端验证：API 创建任务后，Celery Worker 将任务推进为 `completed`，且 PostgreSQL 中可按 `task_id` 查询到 `fixture://fastapi_background_tasks.md` 的原文长度、Hash 与 UTC 快照时间。
+- 已新增 `SourceSnapshotService`，以“先确认任务存在、再查询来源快照”的方式组织来源读取用例；应用层不直接依赖 FastAPI 或 PostgreSQL。
+- 已提供 `GET /api/v1/research-tasks/{task_id}/sources`：未知任务返回 `404`，已存在但尚无来源的任务返回 `200 []`，已有来源时返回快照 ID、URI、类型、原文、SHA-256 Hash 与 UTC 快照时间。
+- 已完成来源读取的应用层与 API 契约测试；当前完整测试套件为 **49 passed**，Ruff 静态检查通过。
 
 ### 尚未实现
 
@@ -98,6 +101,12 @@ Plan
 
 ## 本地运行
 
+先在项目根目录准备 PostgreSQL 与 Redis（首次运行前需基于 `.env.example` 创建本地、且不提交 Git 的 `.env`）：
+
+```powershell
+docker compose up -d
+```
+
 进入后端目录：
 
 ```powershell
@@ -110,10 +119,22 @@ Set-Location -LiteralPath .\backend
 uv sync
 ```
 
-启动开发服务器：
+执行数据库迁移：
+
+```powershell
+uv run alembic upgrade head
+```
+
+在一个终端启动 API：
 
 ```powershell
 uv run uvicorn evidenceforge.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+在另一个终端启动 Worker：
+
+```powershell
+uv run celery -A evidenceforge.infrastructure.worker_tasks:celery_app worker --loglevel=INFO -Q research --pool=solo
 ```
 
 浏览器验证：
@@ -134,6 +155,51 @@ http://127.0.0.1:8000/docs
 
 > `GET /healthz` 当前只表示 API 进程存活；它不代表数据库、Redis、Worker、模型或外部来源已经就绪。
 
+## 当前 API
+
+| 方法 | 路径 | 当前行为 |
+|---|---|---|
+| `POST` | `/api/v1/research-tasks` | 创建任务并投递到 Redis，返回 `202` 与初始 `queued` 状态。 |
+| `GET` | `/api/v1/research-tasks/{task_id}` | 查询任务问题与当前状态；未知任务返回 `404`。 |
+| `POST` | `/api/v1/research-tasks/{task_id}/cancel` | 请求取消任务；重复请求保持幂等。 |
+| `GET` | `/api/v1/research-tasks/{task_id}/sources` | 读取该任务已保存的来源快照；未知任务为 `404`，尚无来源为 `200 []`。 |
+
+创建任务后，Worker 会读取当前受控 Fixture，并将一个来源快照写入 PostgreSQL。任务变为 `completed` 后，可以读取来源：
+
+```powershell
+$taskId = '<创建接口返回的 task_id>'
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/research-tasks/$taskId/sources"
+```
+
+当前 Fixture 场景下，返回数组中的每一项具有如下形态：
+
+```json
+{
+  "snapshot_id": "UUID",
+  "source_uri": "fixture://fastapi_background_tasks.md",
+  "source_kind": "fixture",
+  "raw_content": "...",
+  "content_hash": "SHA-256 hex digest",
+  "captured_at": "UTC ISO-8601 timestamp"
+}
+```
+
+## 验证
+
+在 `backend/` 目录运行：
+
+```powershell
+uv run pytest -q
+uv run ruff check src tests migrations
+```
+
+截至 Day 9，预期结果为：
+
+```text
+49 passed
+All checks passed!
+```
+
 ## 开发原则
 
 - 外部网页、PDF 与工具输出均视为不可信数据，而不是系统指令；
@@ -151,8 +217,9 @@ http://127.0.0.1:8000/docs
 - **Day 5 ✅**：完成 Redis 7、Celery 配置、`CeleryTaskQueue`、Worker Stub，并验证真实任务可从 `queued` 自动推进至 `completed`；提交：`1a4fdde feat(worker): process research tasks with Celery`；
 - **Day 6 ✅**：完成可测试的 `ResearchTaskProcessor`、`ResearchExecutor` 抽象、Stub / Fake 执行器，以及 Worker 执行失败时的 `running → failed` 状态记录与单元测试；提交：`ac98d23 feat(worker): handle task execution failures`；
 - **Day 7 ✅**：完成受控 Markdown Fixture、`FixtureResearchExecutor`、Fixture 路径配置及其测试；已验证真实 Celery Worker 成功读取本地资料并将任务推进至 `completed`；提交：`4052b22 feat(research): load controlled fixture source`；
-- **Day 8 ✅（待本次提交）**：完成 `SourceSnapshot` 领域模型、`SourceSnapshotRepository` Port / Fake、`source_snapshots` Alembic 迁移、PostgreSQL Repository、Fixture 执行器写入与 Worker 真实依赖装配；已验证真实任务从 `queued` 进入 `completed` 后，PostgreSQL 中存在关联的 Fixture 来源快照、SHA-256 Hash 和 UTC `captured_at`；
-- **下一步 Day 9**：为已持久化的来源快照增加只读查询 API，例如按任务查询来源列表；暂不接真实网页/PDF、RAG、模型、SSE 或 React。
+- **Day 8 ✅**：完成 `SourceSnapshot` 领域模型、`SourceSnapshotRepository` Port / Fake、`source_snapshots` Alembic 迁移、PostgreSQL Repository、Fixture 执行器写入与 Worker 真实依赖装配；已验证真实任务从 `queued` 进入 `completed` 后，PostgreSQL 中存在关联的 Fixture 来源快照、SHA-256 Hash 和 UTC `captured_at`；提交：`0265dea feat(research): persist fixture source snapshots`；
+- **Day 9 ✅**：完成 `SourceSnapshotService`、来源快照响应契约和 `GET /api/v1/research-tasks/{task_id}/sources`；已覆盖已有来源、空来源和未知任务三种语义，并真实验证 API → Redis → Worker → PostgreSQL → HTTP 读取闭环；提交：`17a22a9 feat(api): expose task source snapshots`；
+- **下一步 Day 10**：建立追加式 `task_events` 持久化与事件发布边界，记录任务状态变化；暂不接 SSE。
 
 详细的项目架构、阶段路线、决策、真实状态和跨对话续接信息维护在个人知识库中：
 
