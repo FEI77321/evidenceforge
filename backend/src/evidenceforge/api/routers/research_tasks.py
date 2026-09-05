@@ -3,16 +3,28 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from evidenceforge.api.deps import get_task_service
+from evidenceforge.api.deps import (
+    get_source_snapshot_service,
+    get_task_service,
+)
 from evidenceforge.api.schemas import (
     ResearchTaskCreateRequest,
     ResearchTaskResponse,
+    SourceSnapshotResponse,
+)
+from evidenceforge.application.source_snapshot_service import (
+    SourceSnapshotService,
 )
 from evidenceforge.application.task_service import TaskService
 
 TaskServiceDependency = Annotated[
     TaskService,
     Depends(get_task_service),
+]
+
+SourceSnapshotServiceDependency = Annotated[
+    SourceSnapshotService,
+    Depends(get_source_snapshot_service),
 ]
 
 router = APIRouter(
@@ -88,3 +100,33 @@ async def cancel_research_task(
         question=task.question,
         status=task.status,
     )
+
+
+@router.get(
+    "/{task_id}/sources",
+    response_model=list[SourceSnapshotResponse],
+)
+async def list_research_task_sources(
+    task_id: UUID,
+    service: SourceSnapshotServiceDependency,
+) -> list[SourceSnapshotResponse]:
+    """读取一条调研任务保存的来源快照。"""
+
+    snapshots = await service.list_sources(task_id)
+    if snapshots is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="research task not found",
+        )
+
+    return [
+        SourceSnapshotResponse(
+            snapshot_id=snapshot.id,
+            source_uri=snapshot.source_uri,
+            source_kind=snapshot.source_kind,
+            raw_content=snapshot.raw_content,
+            content_hash=snapshot.content_hash,
+            captured_at=snapshot.captured_at,
+        )
+        for snapshot in snapshots
+    ]

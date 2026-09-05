@@ -1,31 +1,58 @@
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+import anyio
 import pytest
 from fastapi.testclient import TestClient
 
-from evidenceforge.api.deps import get_task_service
+from evidenceforge.api.deps import (
+    get_source_snapshot_service,
+    get_task_service,
+)
+from evidenceforge.application.source_snapshot_service import (
+    SourceSnapshotService,
+)
 from evidenceforge.application.task_service import TaskService
+from evidenceforge.domain.sources import SourceSnapshot
 from evidenceforge.main import app
-from evidenceforge.testing import FakeTaskQueue, FakeTaskRepository
+from evidenceforge.testing import (
+    FakeSourceSnapshotRepository,
+    FakeTaskQueue,
+    FakeTaskRepository,
+)
 
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
-    repository = FakeTaskRepository()
+def snapshot_repository() -> FakeSourceSnapshotRepository:
+    return FakeSourceSnapshotRepository()
+
+
+@pytest.fixture
+def client(
+    snapshot_repository: FakeSourceSnapshotRepository,
+) -> Iterator[TestClient]:
+    task_repository = FakeTaskRepository()
     queue = FakeTaskQueue()
-    service = TaskService(
-        repository=repository,
+    task_service = TaskService(
+        repository=task_repository,
         queue=queue,
     )
+    source_snapshot_service = SourceSnapshotService(
+        task_repository=task_repository,
+        snapshot_repository=snapshot_repository,
+    )
 
-    app.dependency_overrides[get_task_service] = lambda: service
+    app.dependency_overrides[get_task_service] = lambda: task_service
+    app.dependency_overrides[get_source_snapshot_service] = lambda: (
+        source_snapshot_service
+    )
 
     try:
         with TestClient(app) as test_client:
             yield test_client
     finally:
-        app.dependency_overrides.pop(get_task_service, None)
+        app.dependency_overrides.clear()
 
 
 def test_create_research_task_returns_202_and_queued_task(
@@ -118,3 +145,64 @@ def test_cancel_research_task_requests_cancellation_idempotently(
 
     assert second_cancel_response.status_code == 200
     assert second_cancel_response.json()["status"] == "cancel_requested"
+
+
+def test_list_research_task_sources_returns_existing_snapshots(
+    client: TestClient,
+    snapshot_repository: FakeSourceSnapshotRepository,
+) -> None:
+    create_response = client.post(
+        "/api/v1/research-tasks",
+        json={"question": "调研 FastAPI BackgroundTasks 的适用边界"},
+    )
+    task_id = UUID(create_response.json()["task_id"])
+    snapshot = SourceSnapshot.create(
+        task_id=task_id,
+        source_uri="fixture://fastapi_background_tasks.md",
+        source_kind="fixture",
+        raw_content="FastAPI BackgroundTasks are useful for small tasks.",
+        captured_at=datetime(2026, 9, 4, 6, 0, tzinfo=UTC),
+    )
+    anyio.run(snapshot_repository.add, snapshot)
+
+    response = client.get(f"/api/v1/research-tasks/{task_id}/sources")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "snapshot_id": str(snapshot.id),
+            "source_uri": "fixture://fastapi_background_tasks.md",
+            "source_kind": "fixture",
+            "raw_content": "FastAPI BackgroundTasks are useful for small tasks.",
+            "content_hash": snapshot.content_hash,
+            "captured_at": "2026-09-04T06:00:00Z",
+        },
+    ]
+
+
+def test_list_research_task_sources_returns_an_empty_list_when_no_sources_exist(
+    client: TestClient,
+) -> None:
+    create_response = client.post(
+        "/api/v1/research-tasks",
+        json={"question": "尚未被 Worker 执行的任务"},
+    )
+    task_id = create_response.json()["task_id"]
+
+    response = client.get(f"/api/v1/research-tasks/{task_id}/sources")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_research_task_sources_returns_404_for_an_unknown_task(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        f"/api/v1/research-tasks/{uuid4()}/sources",
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "research task not found",
+    }

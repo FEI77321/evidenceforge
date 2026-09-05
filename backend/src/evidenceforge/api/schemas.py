@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -22,3 +23,14 @@ class ResearchTaskResponse(BaseModel):
     task_id: UUID
     question: str
     status: TaskStatus
+
+
+class SourceSnapshotResponse(BaseModel):
+    """返回给 API 调用方的不可变来源快照。"""
+
+    snapshot_id: UUID
+    source_uri: str
+    source_kind: str
+    raw_content: str
+    content_hash: str
+    captured_at: datetime
