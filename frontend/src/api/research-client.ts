@@ -55,6 +55,17 @@ export function createResearchTask(
   });
 }
 
+export function cancelResearchTask(
+  taskId: string,
+): Promise<ResearchTask> {
+  return request<ResearchTask>(
+    `/research-tasks/${taskId}/cancel`,
+    {
+      method: "POST",
+    },
+  );
+}
+
 export function getResearchTask(
   taskId: string,
 ): Promise<ResearchTask> {

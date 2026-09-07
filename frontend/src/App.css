@@ -119,6 +119,27 @@ button:disabled {
   background: #fef3f2;
 }
 
+.task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+}
+
+.danger-button {
+  background: #b42318;
+}
+
+.notice-message {
+  margin: 16px 0 0;
+  padding: 12px;
+  border: 1px solid #f79009;
+  border-radius: 8px;
+  color: #b54708;
+  background: #fffaeb;
+}
+
 .event-heading {
   margin-top: 32px;
   align-items: center;
@@ -162,6 +183,77 @@ button:disabled {
 
 .empty-state {
   padding: 20px 0 4px;
+}
+
+.sources-heading {
+  margin-top: 32px;
+  align-items: center;
+}
+
+.source-description {
+  margin-top: 6px;
+  font-size: 14px;
+}
+
+.source-list {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.source-item {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.source-metadata {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.source-metadata div {
+  display: grid;
+  gap: 4px;
+}
+
+.source-metadata dt {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.source-metadata dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-h);
+}
+
+.content-hash {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.source-item details {
+  margin-top: 16px;
+}
+
+.source-item summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.source-content {
+  overflow-x: auto;
+  margin: 12px 0 0;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--code-bg);
+  font: 14px/1.4 var(--mono);
+  white-space: pre-wrap;
 }
 
 @media (max-width: 640px) {

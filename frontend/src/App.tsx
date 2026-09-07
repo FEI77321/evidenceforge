@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useState,
   type FormEvent,
@@ -6,12 +7,15 @@ import {
 
 import {
   ApiError,
+  cancelResearchTask,
   createResearchTask,
   getTaskEvents,
+  getTaskSources,
   subscribeToTaskEvents,
 } from "./api/research-client";
 import type {
   ResearchTask,
+  SourceSnapshot,
   TaskEvent,
   TaskStatus,
 } from "./types/research";
@@ -84,7 +88,32 @@ function App() {
   const [streamState, setStreamState] = useState<EventStreamState>(
     "disconnected",
   );
+  const [sources, setSources] = useState<SourceSnapshot[]>([]);
+  const [isLoadingSources, setIsLoadingSources] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
   const taskId = task?.task_id;
+
+  const loadTaskSources = useCallback(
+    async (sourceTaskId: string): Promise<void> => {
+      setIsLoadingSources(true);
+
+      try {
+        const taskSources = await getTaskSources(sourceTaskId);
+        setSources(taskSources);
+      } catch (error) {
+        if (error instanceof ApiError) {
+          setErrorMessage(
+            `读取来源失败（${error.status}）：${error.message}`,
+          );
+        } else {
+          setErrorMessage("读取来源失败，请确认后端服务正在运行。");
+        }
+      } finally {
+        setIsLoadingSources(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!taskId) {
@@ -119,6 +148,10 @@ function App() {
               };
             });
           }
+
+          if (nextStatus === "completed") {
+            void loadTaskSources(taskId);
+          }
         },
         onError: () => {
           setStreamState("reconnecting");
@@ -129,7 +162,7 @@ function App() {
     return () => {
       unsubscribe();
     };
-  }, [taskId]);
+  }, [taskId, loadTaskSources]);
 
   async function loadTaskEvents(taskId: string): Promise<void> {
     setIsLoadingEvents(true);
@@ -161,6 +194,8 @@ function App() {
       const createdTask = await createResearchTask(normalizedQuestion);
 
       setStreamState("connecting");
+      setEvents([]);
+      setSources([]);
       setTask(createdTask);
       setQuestion("");
       await loadTaskEvents(createdTask.task_id);
@@ -194,6 +229,30 @@ function App() {
       } else {
         setErrorMessage("读取事件失败，请确认后端服务正在运行。");
       }
+    }
+  }
+
+  async function handleCancelTask(): Promise<void> {
+    if (!task) {
+      return;
+    }
+
+    setIsCanceling(true);
+    setErrorMessage(null);
+
+    try {
+      const updatedTask = await cancelResearchTask(task.task_id);
+      setTask(updatedTask);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setErrorMessage(
+          `请求取消失败（${error.status}）：${error.message}`,
+        );
+      } else {
+        setErrorMessage("请求取消失败，请确认后端服务正在运行。");
+      }
+    } finally {
+      setIsCanceling(false);
     }
   }
 
@@ -236,14 +295,32 @@ function App() {
               <p className="eyebrow">当前任务</p>
               <h2>{task.question}</h2>
             </div>
-            <span className={`status status--${task.status}`}>
-              {task.status}
-            </span>
+            <div className="task-actions">
+              <span className={`status status--${task.status}`}>
+                {task.status}
+              </span>
+              {task.status === "queued" || task.status === "running" ? (
+                <button
+                  type="button"
+                  className="danger-button"
+                  onClick={handleCancelTask}
+                  disabled={isCanceling}
+                >
+                  {isCanceling ? "正在请求取消……" : "请求取消"}
+                </button>
+              ) : null}
+            </div>
           </div>
 
           <p className="task-id">
             Task ID：<code>{task.task_id}</code>
           </p>
+
+          {task.status === "cancel_requested" ? (
+            <p className="notice-message">
+              已发送取消请求，正在等待 Worker 在安全检查点结束任务。
+            </p>
+          ) : null}
 
           <div className="section-heading event-heading">
             <div>
@@ -280,6 +357,68 @@ function App() {
                   <pre>
                     {JSON.stringify(taskEvent.payload, null, 2)}
                   </pre>
+                </li>
+              ))}
+            </ol>
+          )}
+
+          <div className="section-heading sources-heading">
+            <div>
+              <h2>来源快照</h2>
+              <p className="source-description">
+                来源原文以纯文本展示，不会作为 HTML 执行。
+              </p>
+            </div>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => void loadTaskSources(task.task_id)}
+              disabled={isLoadingSources}
+            >
+              {isLoadingSources ? "读取中……" : "刷新来源"}
+            </button>
+          </div>
+
+          {task.status !== "completed" ? (
+            <p className="empty-state">
+              任务完成后会自动读取已保存的来源快照。
+            </p>
+          ) : isLoadingSources ? (
+            <p className="empty-state">正在读取来源快照……</p>
+          ) : sources.length === 0 ? (
+            <p className="empty-state">该任务尚未保存来源快照。</p>
+          ) : (
+            <ol className="source-list">
+              {sources.map((source) => (
+                <li key={source.snapshot_id} className="source-item">
+                  <dl className="source-metadata">
+                    <div>
+                      <dt>URI</dt>
+                      <dd>{source.source_uri}</dd>
+                    </div>
+                    <div>
+                      <dt>类型</dt>
+                      <dd>{source.source_kind}</dd>
+                    </div>
+                    <div>
+                      <dt>快照时间</dt>
+                      <dd>
+                        {formatOccurredAt(source.captured_at)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>SHA-256</dt>
+                      <dd className="content-hash">
+                        {source.content_hash}
+                      </dd>
+                    </div>
+                  </dl>
+                  <details>
+                    <summary>查看保存的来源原文</summary>
+                    <pre className="source-content">
+                      {source.raw_content}
+                    </pre>
+                  </details>
                 </li>
               ))}
             </ol>
