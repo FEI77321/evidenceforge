@@ -251,7 +251,7 @@ ORDER BY sequence;
 - **Day 8 ✅**：完成 `SourceSnapshot` 领域模型、`SourceSnapshotRepository` Port / Fake、`source_snapshots` Alembic 迁移、PostgreSQL Repository、Fixture 执行器写入与 Worker 真实依赖装配；已验证真实任务从 `queued` 进入 `completed` 后，PostgreSQL 中存在关联的 Fixture 来源快照、SHA-256 Hash 和 UTC `captured_at`；提交：`0265dea feat(research): persist fixture source snapshots`；
 - **Day 9 ✅**：完成 `SourceSnapshotService`、来源快照响应契约和 `GET /api/v1/research-tasks/{task_id}/sources`；已覆盖已有来源、空来源和未知任务三种语义，并真实验证 API → Redis → Worker → PostgreSQL → HTTP 读取闭环；提交：`17a22a9 feat(api): expose task source snapshots`；
 - **Day 10 ✅**：完成追加式 `task_events` 领域模型、Port / Fake、PostgreSQL 表与 Repository、Alembic migration；创建与取消请求分别记录 `created`、`cancel_requested`，Worker 状态处理分别记录 `running`、`completed`、`failed`、`canceled`。已完成成功和取消两条真实 API → Redis → Celery Worker → PostgreSQL 事件链路验证；暂不提供事件查询 API 与 SSE；提交：`18d503b feat(events): persist task lifecycle events`。
-- **Day 11 ✅**：完成 `TaskEventService`、事件读取响应契约、真实 PostgreSQL 事件查询、`GET /api/v1/research-tasks/{task_id}/events` 与 Fake / PostgreSQL / 应用服务 / API 契约测试；事件按 `sequence` 升序返回，未知任务为 `404`，已有但无事件的任务为 `200 []`。
+- **Day 11 ✅**：完成 `TaskEventService`、事件读取响应契约、真实 PostgreSQL 事件查询、`GET /api/v1/research-tasks/{task_id}/events` 与 Fake / PostgreSQL / 应用服务 / API 契约测试；事件按 `sequence` 升序返回，未知任务为 `404`，已有但无事件的任务为 `200 []`；提交：`aa51709 feat(api): expose task lifecycle events`。
 - **下一步 Day 12**：实现最小 SSE 事件流，先回放已持久化的任务事件，再让测试或最小前端观察到后续新增事件；不做多实例广播和复杂连接治理。
 
 详细的项目架构、阶段路线、决策、真实状态和跨对话续接信息维护在个人知识库中：
