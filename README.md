@@ -264,7 +264,7 @@ ORDER BY sequence;
 - **Day 9 ✅**：完成 `SourceSnapshotService`、来源快照响应契约和 `GET /api/v1/research-tasks/{task_id}/sources`；已覆盖已有来源、空来源和未知任务三种语义，并真实验证 API → Redis → Worker → PostgreSQL → HTTP 读取闭环；提交：`17a22a9 feat(api): expose task source snapshots`；
 - **Day 10 ✅**：完成追加式 `task_events` 领域模型、Port / Fake、PostgreSQL 表与 Repository、Alembic migration；创建与取消请求分别记录 `created`、`cancel_requested`，Worker 状态处理分别记录 `running`、`completed`、`failed`、`canceled`。已完成成功和取消两条真实 API → Redis → Celery Worker → PostgreSQL 事件链路验证；暂不提供事件查询 API 与 SSE；提交：`18d503b feat(events): persist task lifecycle events`。
 - **Day 11 ✅**：完成 `TaskEventService`、事件读取响应契约、真实 PostgreSQL 事件查询、`GET /api/v1/research-tasks/{task_id}/events` 与 Fake / PostgreSQL / 应用服务 / API 契约测试；事件按 `sequence` 升序返回，未知任务为 `404`，已有但无事件的任务为 `200 []`；提交：`aa51709 feat(api): expose task lifecycle events`。
-- **Day 12 ✅（提交待创建）**：完成 `TaskEventStreamService`、`GET /api/v1/research-tasks/{task_id}/events/stream`、`StreamingResponse` 与标准 SSE 帧；实现历史事件回放、受控轮询观察新增事件和 `sequence` 去重。已通过自动化测试、真实任务事件流和未知任务 `404` 联调；当前不实现断线续接、心跳、多实例广播或生产级连接治理。
+- **Day 12 ✅**：完成 `TaskEventStreamService`、`GET /api/v1/research-tasks/{task_id}/events/stream`、`StreamingResponse` 与标准 SSE 帧；实现历史事件回放、受控轮询观察新增事件和 `sequence` 去重。已通过自动化测试、真实任务事件流和未知任务 `404` 联调；当前不实现断线续接、心跳、多实例广播或生产级连接治理；提交：`0bad632 feat(stream): add task event SSE replay`。
 - **下一步 Day 13**：建立 React 最小骨架，先定义任务、事件和 API Client 类型，再将任务详情页接入 Day 11 事件查询与 Day 12 SSE。
 
 详细的项目架构、阶段路线、决策、真实状态和跨对话续接信息维护在个人知识库中：
