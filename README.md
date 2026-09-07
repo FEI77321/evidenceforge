@@ -55,6 +55,9 @@ EvidenceForge 面向公开网页与 PDF 调研场景。系统的目标不是只�
 - 已新增 `TaskEventStreamService`：建流时回放已持久化的任务事件，之后以受控低频轮询读取事件历史，并通过 `sequence` 只推送尚未发送的新增事件；
 - 已提供 `GET /api/v1/research-tasks/{task_id}/events/stream`：未知任务返回普通 JSON `404`；存在任务返回 `text/event-stream`，每条 SSE 消息使用 `id: <sequence>`、`event: task_event`、`data: <JSON>` 与空行结束；
 - 已完成事件流回放、后续新增事件推送、sequence 去重、SSE 媒体类型与首帧格式的测试；Day 12 收尾时完整测试套件为 **60 passed**，Ruff 静态检查通过；真实 Uvicorn 联调已验证任务可收到 `created → running → completed`，随机未知任务返回 `404`。
+- 已建立 `frontend/` React + TypeScript + Vite 最小工作台：可创建研究任务、展示任务 ID 与当前状态，并先读取 Day 11 历史事件；
+- 前端通过浏览器原生 `EventSource` 订阅 Day 12 的 `/events/stream`。每次任务 ID 切换时关闭旧连接、建立新连接；历史回放或浏览器重连产生的重复事件按 `sequence` 去重；收到合法事件 Payload 中的 `status` 后同步更新任务状态标签；
+- FastAPI 仅向本机 Vite 开发源 `http://localhost:5173` 与 `http://127.0.0.1:5173` 开放 CORS 的 `GET` / `POST` 与 `Content-Type`；自动化测试验证预检响应。Day 13 收尾时后端完整测试套件为 **61 passed**、Ruff 通过，前端 `npm run build` 通过；真实浏览器联调已验证不点击“刷新事件”时任务状态和时间线会随 SSE 自动更新。
 
 ### 尚未实现
 
@@ -64,7 +67,7 @@ EvidenceForge 面向公开网页与 PDF 调研场景。系统的目标不是只�
 - 真实网页 / PDF 摄入、真实 URL 抓取、来源版本比较与差异展示；
 - RAG 检索、LangGraph 工作流、Tool Calling；
 - Claim-Evidence 校验、安全门、红队评测；
-- React 前端；
+- 完整 React 调研工作台：报告阅读、来源 / 证据卡片、取消操作、错误恢复和生产级可用性；当前仅实现任务创建、状态与事件时间线的最小工作台；
 - PostgreSQL 中的证据、结论与报告等后续数据表。
 
 ## 项目目标
@@ -156,6 +159,22 @@ http://127.0.0.1:8000/healthz
 http://127.0.0.1:8000/docs
 ```
 
+在项目根目录的另一个终端启动前端：
+
+```powershell
+Set-Location -LiteralPath .\frontend
+npm install
+npm run dev
+```
+
+随后打开：
+
+```text
+http://localhost:5173/
+```
+
+前端默认请求 `http://127.0.0.1:8000/api/v1`；可通过 `VITE_API_BASE_URL` 覆盖。开发期后端 CORS 仅允许本机 Vite 的 `localhost:5173` 和 `127.0.0.1:5173` 两个来源。
+
 当前健康检查返回：
 
 ```json
@@ -228,7 +247,7 @@ uv run ruff check src tests migrations
 All checks passed!
 ```
 
-Day 12 的事件流相关测试为 **8 passed**；收尾后的完整测试套件为 **60 passed**，Ruff 静态检查通过。除自动化测试外，还完成了真实 API → Redis → Celery Worker → PostgreSQL → SSE 联调：随机未知任务的 `/events/stream` 返回 JSON `404`，真实任务可接收到按序的 `created → running → completed` 事件。创建完成任务后，可在 PostgreSQL 中按任务 ID 查询：
+Day 12 的事件流相关测试为 **8 passed**；Day 13 增加 CORS 预检契约测试后，后端完整测试套件为 **61 passed**，Ruff 静态检查通过；前端 `npm run build` 通过。除自动化测试外，还完成了真实 API → Redis → Celery Worker → PostgreSQL → SSE → React 浏览器联调：随机未知任务的 `/events/stream` 返回 JSON `404`，真实任务可接收到按序的 `created → running → completed` 事件；浏览器不点击“刷新事件”时，事件列表和任务状态标签会随 SSE 自动更新。创建完成任务后，可在 PostgreSQL 中按任务 ID 查询：
 
 ```sql
 SELECT
@@ -265,7 +284,8 @@ ORDER BY sequence;
 - **Day 10 ✅**：完成追加式 `task_events` 领域模型、Port / Fake、PostgreSQL 表与 Repository、Alembic migration；创建与取消请求分别记录 `created`、`cancel_requested`，Worker 状态处理分别记录 `running`、`completed`、`failed`、`canceled`。已完成成功和取消两条真实 API → Redis → Celery Worker → PostgreSQL 事件链路验证；暂不提供事件查询 API 与 SSE；提交：`18d503b feat(events): persist task lifecycle events`。
 - **Day 11 ✅**：完成 `TaskEventService`、事件读取响应契约、真实 PostgreSQL 事件查询、`GET /api/v1/research-tasks/{task_id}/events` 与 Fake / PostgreSQL / 应用服务 / API 契约测试；事件按 `sequence` 升序返回，未知任务为 `404`，已有但无事件的任务为 `200 []`；提交：`aa51709 feat(api): expose task lifecycle events`。
 - **Day 12 ✅**：完成 `TaskEventStreamService`、`GET /api/v1/research-tasks/{task_id}/events/stream`、`StreamingResponse` 与标准 SSE 帧；实现历史事件回放、受控轮询观察新增事件和 `sequence` 去重。已通过自动化测试、真实任务事件流和未知任务 `404` 联调；当前不实现断线续接、心跳、多实例广播或生产级连接治理；提交：`0bad632 feat(stream): add task event SSE replay`。
-- **下一步 Day 13**：建立 React 最小骨架，先定义任务、事件和 API Client 类型，再将任务详情页接入 Day 11 事件查询与 Day 12 SSE。
+- **Day 13 ✅**：建立 React + TypeScript + Vite 最小工作台，定义任务、事件与 API Client 类型；页面可创建任务、读取 Day 11 历史事件，并以浏览器 `EventSource` 消费 Day 12 SSE。前端按 `sequence` 合并并去重事件，同时由合法 `payload.status` 同步任务状态；后端只对本机 Vite 开放最小 CORS。自动化验证为后端 `61 passed`、Ruff 通过、前端 build 通过，真实浏览器联调确认不点击刷新也会自动出现后续事件与状态变化；提交待收尾。
+- **下一步 Day 14**：在已验证的最小前端上接入任务取消操作与来源快照读取展示；保持当前受控 Fixture 边界，不开始真实网页 / PDF 抓取。
 
 详细的项目架构、阶段路线、决策、真实状态和跨对话续接信息维护在个人知识库中：
 

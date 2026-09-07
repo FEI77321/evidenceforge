@@ -222,3 +222,19 @@ def test_stream_research_task_events_returns_404_for_an_unknown_task(
     assert response.json() == {
         "detail": "research task not found",
     }
+
+def test_cors_allows_vite_development_origin(
+    client: TestClient,
+) -> None:
+    response = client.options(
+        "/api/v1/research-tasks",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == (
+        "http://localhost:5173"
+    )
