@@ -8,12 +8,20 @@ from fastapi.testclient import TestClient
 from evidenceforge.api.deps import (
     get_source_snapshot_service,
     get_task_event_service,
+    get_task_event_stream_service,
     get_task_service,
 )
+from evidenceforge.api.routers.research_tasks import (
+    stream_research_task_events,
+)
+from evidenceforge.api.schemas import TaskEventResponse
 from evidenceforge.application.source_snapshot_service import (
     SourceSnapshotService,
 )
 from evidenceforge.application.task_event_service import TaskEventService
+from evidenceforge.application.task_event_stream_service import (
+    TaskEventStreamService,
+)
 from evidenceforge.application.task_service import TaskService
 from evidenceforge.domain.events import TaskEventType
 from evidenceforge.domain.tasks import ResearchTask
@@ -51,7 +59,14 @@ def client(
         task_repository=task_repository,
         event_repository=event_repository,
     )
+    task_event_stream_service = TaskEventStreamService(
+        task_event_service=task_event_service,
+        poll_interval_seconds=0.01,
+    )
 
+    app.dependency_overrides[get_task_event_stream_service] = lambda: (
+        task_event_stream_service
+    )
     app.dependency_overrides[get_task_service] = lambda: task_service
     app.dependency_overrides[get_source_snapshot_service] = lambda: (
         source_snapshot_service
@@ -139,6 +154,68 @@ def test_list_research_task_events_returns_404_for_an_unknown_task(
 ) -> None:
     response = client.get(
         f"/api/v1/research-tasks/{uuid4()}/events",
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "research task not found",
+    }
+
+@pytest.mark.anyio
+async def test_stream_research_task_events_returns_sse_replay() -> None:
+    task_repository = FakeTaskRepository()
+    event_repository = FakeTaskEventRepository()
+    task_event_service = TaskEventService(
+        task_repository=task_repository,
+        event_repository=event_repository,
+    )
+    stream_service = TaskEventStreamService(
+        task_event_service=task_event_service,
+        poll_interval_seconds=0.01,
+    )
+    task = ResearchTask.create(
+        question="验证 SSE 事件回放协议",
+    )
+
+    await task_repository.add(task)
+    created_event = await event_repository.append(
+        task_id=task.id,
+        event_type=TaskEventType.CREATED,
+        payload={"status": "queued"},
+    )
+
+    response = await stream_research_task_events(
+        task.id,
+        task_event_service=task_event_service,
+        stream_service=stream_service,
+    )
+
+    assert response.media_type == "text/event-stream"
+
+    first_chunk = await anext(response.body_iterator)
+
+    expected_event = TaskEventResponse(
+        sequence=created_event.sequence,
+        event_type=created_event.event_type,
+        stage=created_event.stage,
+        payload=dict(created_event.payload),
+        occurred_at=created_event.occurred_at,
+    )
+
+    assert first_chunk == (
+        f"id: {created_event.sequence}\n"
+        "event: task_event\n"
+        f"data: {expected_event.model_dump_json()}\n\n"
+    )
+
+    await response.body_iterator.aclose()
+
+
+def test_stream_research_task_events_returns_404_for_an_unknown_task(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        f"/api/v1/research-tasks/{uuid4()}/events/stream",
     )
 
     assert response.status_code == 404

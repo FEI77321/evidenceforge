@@ -2,6 +2,9 @@ from evidenceforge.application.source_snapshot_service import (
     SourceSnapshotService,
 )
 from evidenceforge.application.task_event_service import TaskEventService
+from evidenceforge.application.task_event_stream_service import (
+    TaskEventStreamService,
+)
 from evidenceforge.application.task_service import TaskService
 from evidenceforge.infrastructure.celery_task_queue import CeleryTaskQueue
 from evidenceforge.infrastructure.database import async_session_factory
@@ -64,4 +67,10 @@ def get_task_event_service() -> TaskEventService:
     return TaskEventService(
         task_repository=task_repository,
         event_repository=event_repository,
+    )
+def get_task_event_stream_service() -> TaskEventStreamService:
+    """为 API Router 提供真实的任务事件流应用服务。"""
+
+    return TaskEventStreamService(
+        task_event_service=get_task_event_service(),
     )

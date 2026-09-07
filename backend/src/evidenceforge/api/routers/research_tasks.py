@@ -1,11 +1,14 @@
+from collections.abc import AsyncIterator
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 
 from evidenceforge.api.deps import (
     get_source_snapshot_service,
     get_task_event_service,
+    get_task_event_stream_service,
     get_task_service,
 )
 from evidenceforge.api.schemas import (
@@ -18,6 +21,9 @@ from evidenceforge.application.source_snapshot_service import (
     SourceSnapshotService,
 )
 from evidenceforge.application.task_event_service import TaskEventService
+from evidenceforge.application.task_event_stream_service import (
+    TaskEventStreamService,
+)
 from evidenceforge.application.task_service import TaskService
 
 TaskServiceDependency = Annotated[
@@ -33,6 +39,11 @@ SourceSnapshotServiceDependency = Annotated[
 TaskEventServiceDependency = Annotated[
     TaskEventService,
     Depends(get_task_event_service),
+]
+
+TaskEventStreamServiceDependency = Annotated[
+    TaskEventStreamService,
+    Depends(get_task_event_stream_service),
 ]
 
 router = APIRouter(
@@ -166,3 +177,52 @@ async def list_research_task_events(
         )
         for event in events
     ]
+
+def _format_task_event_as_sse(
+    event: TaskEventResponse,
+) -> str:
+    """将一条任务事件编码为符合 SSE 协议的消息。"""
+
+    return (
+        f"id: {event.sequence}\n"
+        "event: task_event\n"
+        f"data: {event.model_dump_json()}\n\n"
+    )
+
+
+@router.get(
+    "/{task_id}/events/stream",
+    response_class=StreamingResponse,
+)
+async def stream_research_task_events(
+    task_id: UUID,
+    task_event_service: TaskEventServiceDependency,
+    stream_service: TaskEventStreamServiceDependency,
+) -> StreamingResponse:
+    """回放并持续推送一条调研任务的生命周期事件。"""
+
+    initial_events = await task_event_service.list_events(task_id)
+    if initial_events is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="research task not found",
+        )
+
+    async def event_stream() -> AsyncIterator[str]:
+        async for event in stream_service.stream_events(
+            task_id,
+            initial_events=initial_events,
+        ):
+            response = TaskEventResponse(
+                sequence=event.sequence,
+                event_type=event.event_type,
+                stage=event.stage,
+                payload=dict(event.payload),
+                occurred_at=event.occurred_at,
+            )
+            yield _format_task_event_as_sse(response)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+    )

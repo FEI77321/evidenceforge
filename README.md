@@ -52,12 +52,15 @@ EvidenceForge 面向公开网页与 PDF 调研场景。系统的目标不是只�
 - 已新增 `TaskEventService`：先确认任务存在，再按任务读取生命周期事件；未知任务与“任务存在但暂无事件”在应用层分别表示为 `None` 与 `[]`；
 - 已提供 `GET /api/v1/research-tasks/{task_id}/events`：未知任务返回 `404`，已存在但无事件返回 `200 []`，已有事件按 `sequence` 升序返回事件类型、阶段、Payload 与 UTC 时间；
 - 已覆盖事件读取的 Fake 仓储、PostgreSQL 仓储、应用服务与 API 契约测试；Day 11 收尾时完整测试套件为 **55 passed**，Ruff 静态检查通过。
+- 已新增 `TaskEventStreamService`：建流时回放已持久化的任务事件，之后以受控低频轮询读取事件历史，并通过 `sequence` 只推送尚未发送的新增事件；
+- 已提供 `GET /api/v1/research-tasks/{task_id}/events/stream`：未知任务返回普通 JSON `404`；存在任务返回 `text/event-stream`，每条 SSE 消息使用 `id: <sequence>`、`event: task_event`、`data: <JSON>` 与空行结束；
+- 已完成事件流回放、后续新增事件推送、sequence 去重、SSE 媒体类型与首帧格式的测试；Day 12 收尾时完整测试套件为 **60 passed**，Ruff 静态检查通过；真实 Uvicorn 联调已验证任务可收到 `created → running → completed`，随机未知任务返回 `404`。
 
 ### 尚未实现
 
 - 真实网页调研执行逻辑，以及 Worker 运行中的细粒度取消中断；
 - Worker 自动重试策略与可查询的执行日志；
-- SSE 任务进度流；
+- SSE 的 Last-Event-ID 断线续接、心跳、Redis Pub/Sub、多实例广播、背压与生产级连接治理；
 - 真实网页 / PDF 摄入、真实 URL 抓取、来源版本比较与差异展示；
 - RAG 检索、LangGraph 工作流、Tool Calling；
 - Claim-Evidence 校验、安全门、红队评测；
@@ -173,6 +176,7 @@ http://127.0.0.1:8000/docs
 | `POST` | `/api/v1/research-tasks/{task_id}/cancel` | 请求取消任务；重复请求保持幂等。 |
 | `GET` | `/api/v1/research-tasks/{task_id}/sources` | 读取该任务已保存的来源快照；未知任务为 `404`，尚无来源为 `200 []`。 |
 | `GET` | `/api/v1/research-tasks/{task_id}/events` | 读取任务生命周期事件；未知任务为 `404`，已有任务按 `sequence` 升序返回事件，暂无事件为 `200 []`。 |
+| `GET` | `/api/v1/research-tasks/{task_id}/events/stream` | 以 SSE 回放并持续推送任务事件；未知任务为 JSON `404`，存在任务返回 `text/event-stream`。 |
 
 创建任务后，Worker 会读取当前受控 Fixture，并将一个来源快照写入 PostgreSQL。任务变为 `completed` 后，可以读取来源：
 
@@ -200,6 +204,14 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/v1/research-tasks/$taskId/sources"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/research-tasks/$taskId/events"
 ```
 
+订阅任务事件流：
+
+```powershell
+curl.exe -N "http://127.0.0.1:8000/api/v1/research-tasks/$taskId/events/stream"
+```
+
+`-N` 会关闭 curl 的输出缓冲，使每一条 SSE 消息到达时立刻显示。当前流会先回放建连前已有的事件，再通过轮询推送后续新增事件；可按 `Ctrl + C` 主动关闭连接。
+
 ## 验证
 
 在 `backend/` 目录运行：
@@ -209,14 +221,14 @@ uv run pytest -q
 uv run ruff check src tests migrations
 ```
 
-截至 Day 11，预期结果为：
+截至 Day 11，完整测试套件的已验证结果为：
 
 ```text
 55 passed
 All checks passed!
 ```
 
-Day 11 除了自动化测试外，还应完成一次真实 API → Redis → Celery Worker → PostgreSQL → HTTP 事件读取联调。创建完成任务后，可在 PostgreSQL 中按任务 ID 查询：
+Day 12 的事件流相关测试为 **8 passed**；收尾后的完整测试套件为 **60 passed**，Ruff 静态检查通过。除自动化测试外，还完成了真实 API → Redis → Celery Worker → PostgreSQL → SSE 联调：随机未知任务的 `/events/stream` 返回 JSON `404`，真实任务可接收到按序的 `created → running → completed` 事件。创建完成任务后，可在 PostgreSQL 中按任务 ID 查询：
 
 ```sql
 SELECT
@@ -252,7 +264,8 @@ ORDER BY sequence;
 - **Day 9 ✅**：完成 `SourceSnapshotService`、来源快照响应契约和 `GET /api/v1/research-tasks/{task_id}/sources`；已覆盖已有来源、空来源和未知任务三种语义，并真实验证 API → Redis → Worker → PostgreSQL → HTTP 读取闭环；提交：`17a22a9 feat(api): expose task source snapshots`；
 - **Day 10 ✅**：完成追加式 `task_events` 领域模型、Port / Fake、PostgreSQL 表与 Repository、Alembic migration；创建与取消请求分别记录 `created`、`cancel_requested`，Worker 状态处理分别记录 `running`、`completed`、`failed`、`canceled`。已完成成功和取消两条真实 API → Redis → Celery Worker → PostgreSQL 事件链路验证；暂不提供事件查询 API 与 SSE；提交：`18d503b feat(events): persist task lifecycle events`。
 - **Day 11 ✅**：完成 `TaskEventService`、事件读取响应契约、真实 PostgreSQL 事件查询、`GET /api/v1/research-tasks/{task_id}/events` 与 Fake / PostgreSQL / 应用服务 / API 契约测试；事件按 `sequence` 升序返回，未知任务为 `404`，已有但无事件的任务为 `200 []`；提交：`aa51709 feat(api): expose task lifecycle events`。
-- **下一步 Day 12**：实现最小 SSE 事件流，先回放已持久化的任务事件，再让测试或最小前端观察到后续新增事件；不做多实例广播和复杂连接治理。
+- **Day 12 ✅（提交待创建）**：完成 `TaskEventStreamService`、`GET /api/v1/research-tasks/{task_id}/events/stream`、`StreamingResponse` 与标准 SSE 帧；实现历史事件回放、受控轮询观察新增事件和 `sequence` 去重。已通过自动化测试、真实任务事件流和未知任务 `404` 联调；当前不实现断线续接、心跳、多实例广播或生产级连接治理。
+- **下一步 Day 13**：建立 React 最小骨架，先定义任务、事件和 API Client 类型，再将任务详情页接入 Day 11 事件查询与 Day 12 SSE。
 
 详细的项目架构、阶段路线、决策、真实状态和跨对话续接信息维护在个人知识库中：
 
