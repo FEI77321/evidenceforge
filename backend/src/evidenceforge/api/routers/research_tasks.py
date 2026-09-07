@@ -5,16 +5,19 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from evidenceforge.api.deps import (
     get_source_snapshot_service,
+    get_task_event_service,
     get_task_service,
 )
 from evidenceforge.api.schemas import (
     ResearchTaskCreateRequest,
     ResearchTaskResponse,
     SourceSnapshotResponse,
+    TaskEventResponse,
 )
 from evidenceforge.application.source_snapshot_service import (
     SourceSnapshotService,
 )
+from evidenceforge.application.task_event_service import TaskEventService
 from evidenceforge.application.task_service import TaskService
 
 TaskServiceDependency = Annotated[
@@ -25,6 +28,11 @@ TaskServiceDependency = Annotated[
 SourceSnapshotServiceDependency = Annotated[
     SourceSnapshotService,
     Depends(get_source_snapshot_service),
+]
+
+TaskEventServiceDependency = Annotated[
+    TaskEventService,
+    Depends(get_task_event_service),
 ]
 
 router = APIRouter(
@@ -129,4 +137,32 @@ async def list_research_task_sources(
             captured_at=snapshot.captured_at,
         )
         for snapshot in snapshots
+    ]
+
+@router.get(
+    "/{task_id}/events",
+    response_model=list[TaskEventResponse],
+)
+async def list_research_task_events(
+    task_id: UUID,
+    service: TaskEventServiceDependency,
+) -> list[TaskEventResponse]:
+    """读取一条调研任务的生命周期事件。"""
+
+    events = await service.list_events(task_id)
+    if events is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="research task not found",
+        )
+
+    return [
+        TaskEventResponse(
+            sequence=event.sequence,
+            event_type=event.event_type,
+            stage=event.stage,
+            payload=dict(event.payload),
+            occurred_at=event.occurred_at,
+        )
+        for event in events
     ]

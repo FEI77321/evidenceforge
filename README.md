@@ -49,11 +49,14 @@ EvidenceForge 面向公开网页与 PDF 调研场景。系统的目标不是只�
 - 已将任务事件写入接入应用层：`TaskService` 记录 `created`、`cancel_requested`，`ResearchTaskProcessor` 记录 `running`、`completed`、`failed`、`canceled`；
 - 已将真实 PostgreSQL 事件仓储注入 Celery Worker，并完成真实端到端验证：正常任务产生 `created → running → completed`，取消任务产生 `created → cancel_requested → canceled`；取消任务不会执行 Fixture，也不会保存来源快照；
 - 已覆盖任务事件领域规则、Fake 仓储顺序、应用层状态流转、PostgreSQL 持久化与 API 依赖装配；当前完整测试套件为 **55 passed**，Ruff 静态检查通过。
+- 已新增 `TaskEventService`：先确认任务存在，再按任务读取生命周期事件；未知任务与“任务存在但暂无事件”在应用层分别表示为 `None` 与 `[]`；
+- 已提供 `GET /api/v1/research-tasks/{task_id}/events`：未知任务返回 `404`，已存在但无事件返回 `200 []`，已有事件按 `sequence` 升序返回事件类型、阶段、Payload 与 UTC 时间；
+- 已覆盖事件读取的 Fake 仓储、PostgreSQL 仓储、应用服务与 API 契约测试；Day 11 收尾时完整测试套件为 **55 passed**，Ruff 静态检查通过。
 
 ### 尚未实现
 
 - 真实网页调研执行逻辑，以及 Worker 运行中的细粒度取消中断；
-- Worker 自动重试策略、任务事件的 HTTP 查询 API 与可查询的执行日志；
+- Worker 自动重试策略与可查询的执行日志；
 - SSE 任务进度流；
 - 真实网页 / PDF 摄入、真实 URL 抓取、来源版本比较与差异展示；
 - RAG 检索、LangGraph 工作流、Tool Calling；
@@ -169,6 +172,7 @@ http://127.0.0.1:8000/docs
 | `GET` | `/api/v1/research-tasks/{task_id}` | 查询任务问题与当前状态；未知任务返回 `404`。 |
 | `POST` | `/api/v1/research-tasks/{task_id}/cancel` | 请求取消任务；重复请求保持幂等。 |
 | `GET` | `/api/v1/research-tasks/{task_id}/sources` | 读取该任务已保存的来源快照；未知任务为 `404`，尚无来源为 `200 []`。 |
+| `GET` | `/api/v1/research-tasks/{task_id}/events` | 读取任务生命周期事件；未知任务为 `404`，已有任务按 `sequence` 升序返回事件，暂无事件为 `200 []`。 |
 
 创建任务后，Worker 会读取当前受控 Fixture，并将一个来源快照写入 PostgreSQL。任务变为 `completed` 后，可以读取来源：
 
@@ -190,6 +194,12 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/v1/research-tasks/$taskId/sources"
 }
 ```
 
+读取任务事件时间线：
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/research-tasks/$taskId/events"
+```
+
 ## 验证
 
 在 `backend/` 目录运行：
@@ -199,14 +209,14 @@ uv run pytest -q
 uv run ruff check src tests migrations
 ```
 
-截至 Day 10，预期结果为：
+截至 Day 11，预期结果为：
 
 ```text
 55 passed
 All checks passed!
 ```
 
-Day 10 除了自动化测试外，还应完成一次真实 API → Redis → Celery Worker → PostgreSQL 联调。创建完成任务后，可在 PostgreSQL 中按任务 ID 查询：
+Day 11 除了自动化测试外，还应完成一次真实 API → Redis → Celery Worker → PostgreSQL → HTTP 事件读取联调。创建完成任务后，可在 PostgreSQL 中按任务 ID 查询：
 
 ```sql
 SELECT
@@ -241,7 +251,8 @@ ORDER BY sequence;
 - **Day 8 ✅**：完成 `SourceSnapshot` 领域模型、`SourceSnapshotRepository` Port / Fake、`source_snapshots` Alembic 迁移、PostgreSQL Repository、Fixture 执行器写入与 Worker 真实依赖装配；已验证真实任务从 `queued` 进入 `completed` 后，PostgreSQL 中存在关联的 Fixture 来源快照、SHA-256 Hash 和 UTC `captured_at`；提交：`0265dea feat(research): persist fixture source snapshots`；
 - **Day 9 ✅**：完成 `SourceSnapshotService`、来源快照响应契约和 `GET /api/v1/research-tasks/{task_id}/sources`；已覆盖已有来源、空来源和未知任务三种语义，并真实验证 API → Redis → Worker → PostgreSQL → HTTP 读取闭环；提交：`17a22a9 feat(api): expose task source snapshots`；
 - **Day 10 ✅**：完成追加式 `task_events` 领域模型、Port / Fake、PostgreSQL 表与 Repository、Alembic migration；创建与取消请求分别记录 `created`、`cancel_requested`，Worker 状态处理分别记录 `running`、`completed`、`failed`、`canceled`。已完成成功和取消两条真实 API → Redis → Celery Worker → PostgreSQL 事件链路验证；暂不提供事件查询 API 与 SSE；提交：`18d503b feat(events): persist task lifecycle events`。
-- **下一步 Day 11**：提供任务事件查询 API，并为后续 SSE 任务进度流准备应用层查询能力与响应契约。
+- **Day 11 ✅**：完成 `TaskEventService`、事件读取响应契约、真实 PostgreSQL 事件查询、`GET /api/v1/research-tasks/{task_id}/events` 与 Fake / PostgreSQL / 应用服务 / API 契约测试；事件按 `sequence` 升序返回，未知任务为 `404`，已有但无事件的任务为 `200 []`。
+- **下一步 Day 12**：实现最小 SSE 事件流，先回放已持久化的任务事件，再让测试或最小前端观察到后续新增事件；不做多实例广播和复杂连接治理。
 
 详细的项目架构、阶段路线、决策、真实状态和跨对话续接信息维护在个人知识库中：
 

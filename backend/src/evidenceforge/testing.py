@@ -81,6 +81,21 @@ class FakeTaskEventRepository:
 
         return event
 
+    async def list_by_task_id(
+        self,
+        task_id: UUID,
+    ) -> list[TaskEvent]:
+        """返回指定任务的全部事件，按 sequence 升序排列。"""
+
+        return sorted(
+            (
+                event
+                for event in self.events
+                if event.task_id == task_id
+            ),
+            key=lambda event: event.sequence,
+        )
+
 
 class FakeTaskQueue:
     """仅供测试使用的内存任务队列。"""

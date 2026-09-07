@@ -3,6 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from evidenceforge.domain.events import TaskEventType
 from evidenceforge.domain.tasks import TaskStatus
 
 
@@ -34,3 +35,12 @@ class SourceSnapshotResponse(BaseModel):
     raw_content: str
     content_hash: str
     captured_at: datetime
+
+class TaskEventResponse(BaseModel):
+    """返回给 API 调用方的任务生命周期事件。"""
+
+    sequence: int
+    event_type: TaskEventType
+    stage: str | None
+    payload: dict[str, object]
+    occurred_at: datetime

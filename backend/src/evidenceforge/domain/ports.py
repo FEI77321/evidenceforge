@@ -46,6 +46,12 @@ class TaskEventRepository(Protocol):
     ) -> TaskEvent:
         """为任务追加一条事件，并返回带连续序号的事件。"""
 
+    async def list_by_task_id(
+        self,
+        task_id: UUID,
+    ) -> list[TaskEvent]:
+        """返回指定任务的全部事件，按 sequence 升序排列。"""
+
 
 class TaskQueue(Protocol):
     """调研任务投递到后台执行器的抽象契约。"""

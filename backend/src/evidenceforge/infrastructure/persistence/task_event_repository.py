@@ -29,7 +29,6 @@ class PostgreSQLTaskEventRepository:
         payload: Mapping[str, object] | None = None,
     ) -> TaskEvent:
         """为一个已存在任务追加下一条连续序号事件。"""
-
         async with self._session_factory() as session:
             async with session.begin():
                 task_record_id = await session.scalar(
@@ -69,3 +68,30 @@ class PostgreSQLTaskEventRepository:
                 )
 
             return event
+
+    async def list_by_task_id(
+        self,
+        task_id: UUID,
+    ) -> list[TaskEvent]:
+        """读取指定任务的全部事件，并按 sequence 升序排列。"""
+
+        statement = (
+            select(TaskEventRecord)
+            .where(TaskEventRecord.task_id == task_id)
+            .order_by(TaskEventRecord.sequence.asc())
+        )
+
+        async with self._session_factory() as session:
+            records = (await session.scalars(statement)).all()
+
+        return [
+            TaskEvent.create(
+                task_id=record.task_id,
+                sequence=record.sequence,
+                event_type=TaskEventType(record.event_type),
+                stage=record.stage,
+                payload=record.payload,
+                occurred_at=record.occurred_at,
+            )
+            for record in records
+        ]

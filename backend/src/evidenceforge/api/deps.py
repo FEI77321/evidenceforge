@@ -1,6 +1,7 @@
 from evidenceforge.application.source_snapshot_service import (
     SourceSnapshotService,
 )
+from evidenceforge.application.task_event_service import TaskEventService
 from evidenceforge.application.task_service import TaskService
 from evidenceforge.infrastructure.celery_task_queue import CeleryTaskQueue
 from evidenceforge.infrastructure.database import async_session_factory
@@ -47,4 +48,20 @@ def get_source_snapshot_service() -> SourceSnapshotService:
     return SourceSnapshotService(
         task_repository=task_repository,
         snapshot_repository=snapshot_repository,
+    )
+
+
+def get_task_event_service() -> TaskEventService:
+    """为 API Router 提供真实持久化的任务事件读取服务。"""
+
+    task_repository = PostgreSQLTaskRepository(
+        session_factory=async_session_factory,
+    )
+    event_repository = PostgreSQLTaskEventRepository(
+        session_factory=async_session_factory,
+    )
+
+    return TaskEventService(
+        task_repository=task_repository,
+        event_repository=event_repository,
     )

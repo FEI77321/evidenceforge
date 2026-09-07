@@ -70,3 +70,64 @@ async def test_append_persists_task_scoped_ordered_events() -> None:
         (1, "created", None, {"status": "queued"}),
         (2, "running", None, {"status": "running"}),
     ]
+
+
+@pytest.mark.anyio
+async def test_list_by_task_id_returns_only_ordered_domain_events() -> None:
+    task_repository = PostgreSQLTaskRepository(async_session_factory)
+    event_repository = PostgreSQLTaskEventRepository(
+        async_session_factory,
+    )
+    task = ResearchTask.create(
+        question="调研任务事件读取的顺序与隔离性",
+    )
+    other_task = ResearchTask.create(
+        question="不应出现在当前任务时间线中的事件",
+    )
+
+    await task_repository.add(task)
+    await task_repository.add(other_task)
+
+    await event_repository.append(
+        task_id=other_task.id,
+        event_type=TaskEventType.CREATED,
+        payload={"status": "queued"},
+    )
+    await event_repository.append(
+        task_id=task.id,
+        event_type=TaskEventType.CREATED,
+        payload={"status": "queued"},
+    )
+    await event_repository.append(
+        task_id=task.id,
+        event_type=TaskEventType.RUNNING,
+        payload={"status": "running"},
+    )
+
+    events = await event_repository.list_by_task_id(task.id)
+
+    assert [
+        (
+            event.task_id,
+            event.sequence,
+            event.event_type,
+            event.stage,
+            event.payload,
+        )
+        for event in events
+    ] == [
+        (
+            task.id,
+            1,
+            TaskEventType.CREATED,
+            None,
+            {"status": "queued"},
+        ),
+        (
+            task.id,
+            2,
+            TaskEventType.RUNNING,
+            None,
+            {"status": "running"},
+        ),
+    ]
