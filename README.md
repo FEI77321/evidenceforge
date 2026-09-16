@@ -2,6 +2,8 @@
 
 > 一个安全、可验证的网页调研 Agent。
 
+> 演示入口：[`docs/demo_runbook.md`](docs/demo_runbook.md) 与 [`scripts/run_fixture_demo.ps1`](scripts/run_fixture_demo.ps1)。它们使用版本控制内的 Fixture，演示状态机、Celery Worker、追加式事件、来源快照和 SSE 闭环，不依赖真实网页或模型调用。
+
 EvidenceForge 面向公开网页与 PDF 调研场景。系统的目标不是只生成一段看似合理的答案，而是让每条结论都能关联到可追溯的来源、证据片段和验证状态。
 
 ## 当前实现状态
@@ -187,6 +189,16 @@ http://localhost:5173/
 ```
 
 > `GET /healthz` 当前只表示 API 进程存活；它不代表数据库、Redis、Worker、模型或外部来源已经就绪。
+
+### 一键演示验证
+
+在 API、Worker、PostgreSQL 和 Redis 都启动后，可在项目根目录执行：
+
+```powershell
+.\scripts\run_fixture_demo.ps1
+```
+
+脚本会创建一条受控 Fixture 任务，轮询直至任务到达终态，再打印生命周期事件与来源快照的 URI、SHA-256 和时间。预期成功链路是 `queued → running → completed` 与 `created → running → completed`；若依赖未启动或任务未成功完成，脚本会退出失败。这是面试/录屏用的可复现证据入口，完整口述顺序见 [`docs/demo_runbook.md`](docs/demo_runbook.md)。
 
 ## 当前 API
 
